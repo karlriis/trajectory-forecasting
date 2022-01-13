@@ -58,3 +58,5 @@ def read_eth_data(num_steps=5, sampling_rate=4):
         # Calculate own velocities so that they don't depend on sampling rate
         data.loc[data.agent_id == agent_id, 'vel_x'] = data[data.agent_id == agent_id]['pos_x'].diff()
         data.loc[data.agent_id == agent_id, 'vel_y'] = data[data.agent_id == agent_id]['pos_y'].diff()
+        
+    return data, agent_ids
