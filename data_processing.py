@@ -6,12 +6,12 @@ from toolkit.loaders.loader_edinburgh import load_edinburgh
 from matplotlib import pyplot as plt
 import numpy as np
 
-def read_edinburgh_data(num_steps=5):
+def read_edinburgh_data(num_steps=5, sampling_rate=4):
     opentraj_root = './OpenTraj/'
     selected_day = '01Sep' # 3 days of data in total, ['01Jul', '01Aug', '01Sep']
     edinburgh_path = os.path.join(opentraj_root, 'datasets/Edinburgh/annotations', 'tracks.%s.txt' % selected_day)
     traj_dataset = load_edinburgh(edinburgh_path, title="Edinburgh", 
-                                  use_kalman=False, scene_id=selected_day, sampling_rate=4)
+                                  use_kalman=False, scene_id=selected_day, sampling_rate=sampling_rate)
 
     data = traj_dataset.data
 
