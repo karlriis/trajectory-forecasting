@@ -4,6 +4,7 @@ sys.path.insert(0, os.path.abspath(os.getcwd()) + '/OpenTraj/opentraj') # Anacon
 
 from toolkit.loaders.loader_edinburgh import load_edinburgh
 from toolkit.loaders.loader_eth import load_eth
+from toolkit.loaders.loader_crowds import load_crowds
 from matplotlib import pyplot as plt
 import numpy as np
 
@@ -40,6 +41,59 @@ def read_eth_data(num_steps=5, sampling_rate=4):
     traj_dataset = load_eth("OpenTraj/datasets/ETH/seq_eth/obsmat.txt", sampling_rate=sampling_rate)
     data = traj_dataset.data
     data = data[data['label']=='pedestrian']
+    
+    agent_ids = data.agent_id.unique()
+    for agent_id in agent_ids:
+        if len(data[data.agent_id == agent_id]) < 2 * num_steps:
+            data = data[data.agent_id != agent_id]
+    agent_ids = data.agent_id.unique()
+
+
+    for agent_id in agent_ids:
+        first_x = data[data.agent_id == agent_id]['pos_x'].iloc[0]
+        first_y = data[data.agent_id == agent_id]['pos_y'].iloc[0]
+
+        # 'Normalize' the data so that all trajectories will begin at x=0, y=0
+        data.loc[data.agent_id == agent_id, 'pos_x'] = data[data.agent_id == agent_id]['pos_x'] - first_x
+        data.loc[data.agent_id == agent_id, 'pos_y'] = data[data.agent_id == agent_id]['pos_y'] - first_y
+        # Calculate own velocities so that they don't depend on sampling rate
+        data.loc[data.agent_id == agent_id, 'vel_x'] = data[data.agent_id == agent_id]['pos_x'].diff()
+        data.loc[data.agent_id == agent_id, 'vel_y'] = data[data.agent_id == agent_id]['pos_y'].diff()
+        
+    return data, agent_ids
+
+def read_eth_hotel_data(num_steps=5, sampling_rate=4):
+    traj_dataset = load_eth("OpenTraj/datasets/ETH/seq_hotel/obsmat.txt", sampling_rate=sampling_rate)
+    data = traj_dataset.data
+    data = data[data['label']=='pedestrian']
+    
+    agent_ids = data.agent_id.unique()
+    for agent_id in agent_ids:
+        if len(data[data.agent_id == agent_id]) < 2 * num_steps:
+            data = data[data.agent_id != agent_id]
+    agent_ids = data.agent_id.unique()
+
+
+    for agent_id in agent_ids:
+        first_x = data[data.agent_id == agent_id]['pos_x'].iloc[0]
+        first_y = data[data.agent_id == agent_id]['pos_y'].iloc[0]
+
+        # 'Normalize' the data so that all trajectories will begin at x=0, y=0
+        data.loc[data.agent_id == agent_id, 'pos_x'] = data[data.agent_id == agent_id]['pos_x'] - first_x
+        data.loc[data.agent_id == agent_id, 'pos_y'] = data[data.agent_id == agent_id]['pos_y'] - first_y
+        # Calculate own velocities so that they don't depend on sampling rate
+        data.loc[data.agent_id == agent_id, 'vel_x'] = data[data.agent_id == agent_id]['pos_x'].diff()
+        data.loc[data.agent_id == agent_id, 'vel_y'] = data[data.agent_id == agent_id]['pos_y'].diff()
+        
+    return data, agent_ids
+
+def read_UCY_data(num_steps=5):
+    OPENTRAJ_ROOT = './OpenTraj/'
+    zara01_annot = os.path.join(OPENTRAJ_ROOT, 'datasets/UCY/zara01/annotation.vsp')
+    zara01_H_file = os.path.join(OPENTRAJ_ROOT, 'datasets/UCY/zara01/H.txt')
+    traj_dataset = load_crowds(zara01_annot, use_kalman=False, homog_file=zara01_H_file)
+    
+    data = traj_dataset.data
     
     agent_ids = data.agent_id.unique()
     for agent_id in agent_ids:
