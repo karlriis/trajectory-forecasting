@@ -2,9 +2,10 @@ import os
 import sys
 sys.path.insert(0, os.path.abspath(os.getcwd()) + '/OpenTraj/opentraj') # Anaconda python can't find the toolkit path without this for some reason
 
-from toolkit.loaders.loader_edinburgh import load_edinburgh
-from toolkit.loaders.loader_eth import load_eth
-from toolkit.loaders.loader_crowds import load_crowds
+from toolkit.loaders.loader_edinburgh import load_edinburgh #EDINBURGH
+from toolkit.loaders.loader_eth import load_eth #ETH
+from toolkit.loaders.loader_crowds import load_crowds #UCY
+from toolkit.loaders.loader_hermes import load_bottleneck # HERMES
 from matplotlib import pyplot as plt
 import numpy as np
 
@@ -94,6 +95,36 @@ def read_UCY_data(num_steps=5):
     traj_dataset = load_crowds(zara01_annot, use_kalman=False, homog_file=zara01_H_file)
     
     data = traj_dataset.data
+    
+    agent_ids = data.agent_id.unique()
+    for agent_id in agent_ids:
+        if len(data[data.agent_id == agent_id]) < 2 * num_steps:
+            data = data[data.agent_id != agent_id]
+    agent_ids = data.agent_id.unique()
+
+
+    for agent_id in agent_ids:
+        first_x = data[data.agent_id == agent_id]['pos_x'].iloc[0]
+        first_y = data[data.agent_id == agent_id]['pos_y'].iloc[0]
+
+        # 'Normalize' the data so that all trajectories will begin at x=0, y=0
+        data.loc[data.agent_id == agent_id, 'pos_x'] = data[data.agent_id == agent_id]['pos_x'] - first_x
+        data.loc[data.agent_id == agent_id, 'pos_y'] = data[data.agent_id == agent_id]['pos_y'] - first_y
+        # Calculate own velocities so that they don't depend on sampling rate
+        data.loc[data.agent_id == agent_id, 'vel_x'] = data[data.agent_id == agent_id]['pos_x'].diff()
+        data.loc[data.agent_id == agent_id, 'vel_y'] = data[data.agent_id == agent_id]['pos_y'].diff()
+        
+    return data, agent_ids
+
+def read_HERMES_data(num_steps=5, sampling_rate=6):
+    
+    serie = 'Corridor-2D'
+    exp = 'bo-360-160-160'
+    OPENTRAJ_ROOT = './OpenTraj/'
+    annot_file = os.path.join(OPENTRAJ_ROOT, "datasets/HERMES", serie, exp + '.txt')
+    traj_datasets = load_bottleneck(annot_file, sampling_rate=sampling_rate, use_kalman=False, title='Hermes')
+    
+    data = traj_datasets.data
     
     agent_ids = data.agent_id.unique()
     for agent_id in agent_ids:
