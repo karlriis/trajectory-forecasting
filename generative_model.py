@@ -4,6 +4,7 @@ import pandas as pd
 import math
 import scipy.stats as st
 from sklearn.cluster import KMeans
+from tqdm import tqdm
 
 def get_model(params):
     if np.random.rand() < params['CONST_VEL_MODEL_PROB']:
@@ -220,56 +221,41 @@ def predict(sample_x, sample_y, params, trajectory_length=5):
     # ...and move them to the front of the array
     sorted_all_pred_x = np.append(closest_x, sorted_all_pred_x, axis=0)
     sorted_all_pred_y = np.append(closest_y, sorted_all_pred_y, axis=0)
-
-    # group proportions of the whole trajectories
-    first_group_end = params['GROUP_PERCENTAGES'][0]
-    second_group_end = params['GROUP_PERCENTAGES'][1]
-    third_group_end = params['GROUP_PERCENTAGES'][2]
-    fourth_group_end = params['GROUP_PERCENTAGES'][3]
     
-    first_group_no_clusters = params['GROUP_CLUSTER_COUNT'][0]
-    second_group_no_clusters = params['GROUP_CLUSTER_COUNT'][1]
-    third_group_no_clusters = params['GROUP_CLUSTER_COUNT'][2]
-    fourth_group_no_clusters = params['GROUP_CLUSTER_COUNT'][3]
-
+    # Return values will be in a format of [pred_xs: list, pred_ys: list, pred_weigths: list]
+    return_values = [[], [], []]
     
-    # first cluster is a special case, it will contain top 20% of trajectories in a single cluster
-    first_group_x = sorted_all_pred_x[0:int(no_of_traj*first_group_end)]
-    first_group_y = sorted_all_pred_y[0:int(no_of_traj*first_group_end)]
-      
-    second_group_x = sorted_all_pred_x[int(no_of_traj*first_group_end):int(no_of_traj*second_group_end)]
-    second_group_y = sorted_all_pred_y[int(no_of_traj*first_group_end):int(no_of_traj*second_group_end)]
     
-    third_group_x = sorted_all_pred_x[int(no_of_traj*second_group_end):int(no_of_traj*third_group_end)]
-    third_group_y = sorted_all_pred_y[int(no_of_traj*second_group_end):int(no_of_traj*third_group_end)]
+    ## Loop over the representative groups and run K-means clustering on each
+    ## (if group should return more than 1 representative trajectory)
     
-    fourth_group_x = sorted_all_pred_x[int(no_of_traj*third_group_end):int(no_of_traj*fourth_group_end)]
-    fourth_group_y = sorted_all_pred_y[int(no_of_traj*third_group_end):int(no_of_traj*fourth_group_end)]
-    
-    second_group_data = run_KMeans(second_group_x, second_group_y, no_of_clusters=second_group_no_clusters)
-    third_group_data = run_KMeans(third_group_x, third_group_y, no_of_clusters=third_group_no_clusters)
-    fourth_group_data = run_KMeans(fourth_group_x, fourth_group_y, no_of_clusters=fourth_group_no_clusters)
-    
-    # assign the mean trajectories and weights
-    # Note: first group only has 1 trajectory and 1 weight
-    first_c_pred_x = np.mean(first_group_x, axis=0)
-    first_c_pred_y = np.mean(first_group_y, axis=0)
-    first_c_no_of_traj = len(first_group_x)/no_of_traj
-    
-    # Rest of the clusters have 5 trajectories and a weight for each of them
-    second_c_pred_x, second_c_pred_y, second_c_no_of_traj = second_group_data
-    third_c_pred_x, third_c_pred_y, third_c_no_of_traj = third_group_data
-    fourth_c_pred_x, fourth_c_pred_y, fourth_c_no_of_traj = fourth_group_data
+    prev_group_size_end = 0
+    group_size_ends = params['GROUP_PERCENTAGES']
+    for group_idx, group_size_end in enumerate(group_size_ends):
+        group_cluster_count = params['GROUP_CLUSTER_COUNT'][group_idx]
+        
+        group_x = sorted_all_pred_x[int(no_of_traj*prev_group_size_end):int(no_of_traj*group_size_end)]
+        group_y = sorted_all_pred_y[int(no_of_traj*prev_group_size_end):int(no_of_traj*group_size_end)]
+        
+        # No need to run k-means clustering if the group is supposed to have just 1 representative cluster
+        if group_cluster_count == 1:
+            representative_x = np.mean(group_x, axis=0)
+            representative_y = np.mean(group_y, axis=0)
+            trajectory_weight = len(representative_x)/no_of_traj
+            
+            return_values[0].append(representative_x)
+            return_values[1].append(representative_y)
+            return_values[2].append(trajectory_weight)
+        else:
+            group_data = run_KMeans(group_x, group_y, no_of_clusters=group_cluster_count)
+            group_pred_xs, group_pred_ys, group_no_of_trajs = group_data
+            
+            return_values[0] = return_values[0] + [*group_pred_xs]
+            return_values[1] = return_values[1] + [*group_pred_ys]
+            return_values[2] = return_values[2] + [*[i/no_of_traj for i in group_no_of_trajs]]
+        
+        prev_group_size_end = group_size_end
    
     # Return (all_x_predictions, all_y_predictions, all_weights)
-    return (
-        [first_c_pred_x, *second_c_pred_x, *third_c_pred_x, *fourth_c_pred_x],
-        [first_c_pred_y, *second_c_pred_y, *third_c_pred_y, *fourth_c_pred_y],
-        [
-            first_c_no_of_traj, 
-            *[i/no_of_traj for i in second_c_no_of_traj], 
-            *[i/no_of_traj for i in third_c_no_of_traj], 
-            *[i/no_of_traj for i in fourth_c_no_of_traj]
-        ]
-    )
+    return return_values
     
