@@ -188,7 +188,7 @@ def predict(sample_x, sample_y, params, trajectory_length=5):
     no_of_traj = len(sorted_all_pred_x)
 
     
-    # find the closest 20% of trajectories for the highest density trajectory
+    # find the closest TOP% (first cluster size) of trajectories for the highest density trajectory
     highest_density_x = sorted_all_pred_x[0]
     highest_density_y = sorted_all_pred_y[0]
     largest_distance = None
@@ -198,7 +198,7 @@ def predict(sample_x, sample_y, params, trajectory_length=5):
     for idx in range(len(sorted_all_pred_x)):
         distance = calculate_FDE(highest_density_x, highest_density_y, sorted_all_pred_x[idx], sorted_all_pred_y[idx])
         
-        if len(closest_indexes) < no_of_traj*0.2:
+        if len(closest_indexes) < no_of_traj*params['GROUP_PERCENTAGES'][0]:
             closest_indexes = np.append(closest_indexes, idx)
             closest_distances = np.append(closest_distances, distance)
             if largest_distance == None or largest_distance < distance:
@@ -221,45 +221,55 @@ def predict(sample_x, sample_y, params, trajectory_length=5):
     sorted_all_pred_x = np.append(closest_x, sorted_all_pred_x, axis=0)
     sorted_all_pred_y = np.append(closest_y, sorted_all_pred_y, axis=0)
 
-    # cluster proportions of the whole trajectories
-    first_cluster_end = params['CLUSTER_PERCENTAGES'][0]
-    second_cluster_end = params['CLUSTER_PERCENTAGES'][1]
-    third_cluster_end = params['CLUSTER_PERCENTAGES'][2]
-    fourth_cluster_end = params['CLUSTER_PERCENTAGES'][3]
+    # group proportions of the whole trajectories
+    first_group_end = params['GROUP_PERCENTAGES'][0]
+    second_group_end = params['GROUP_PERCENTAGES'][1]
+    third_group_end = params['GROUP_PERCENTAGES'][2]
+    fourth_group_end = params['GROUP_PERCENTAGES'][3]
+    
+    first_group_no_clusters = params['GROUP_CLUSTER_COUNT'][0]
+    second_group_no_clusters = params['GROUP_CLUSTER_COUNT'][1]
+    third_group_no_clusters = params['GROUP_CLUSTER_COUNT'][2]
+    fourth_group_no_clusters = params['GROUP_CLUSTER_COUNT'][3]
 
     
     # first cluster is a special case, it will contain top 20% of trajectories in a single cluster
-    first_cluster_x = sorted_all_pred_x[0:int(no_of_traj*first_cluster_end)]
-    first_cluster_y = sorted_all_pred_y[0:int(no_of_traj*first_cluster_end)]
+    first_group_x = sorted_all_pred_x[0:int(no_of_traj*first_group_end)]
+    first_group_y = sorted_all_pred_y[0:int(no_of_traj*first_group_end)]
       
-    second_cluster_x = sorted_all_pred_x[int(no_of_traj*first_cluster_end):int(no_of_traj*second_cluster_end)]
-    second_cluster_y = sorted_all_pred_y[int(no_of_traj*first_cluster_end):int(no_of_traj*second_cluster_end)]
+    second_group_x = sorted_all_pred_x[int(no_of_traj*first_group_end):int(no_of_traj*second_group_end)]
+    second_group_y = sorted_all_pred_y[int(no_of_traj*first_group_end):int(no_of_traj*second_group_end)]
     
-    third_cluster_x = sorted_all_pred_x[int(no_of_traj*second_cluster_end):int(no_of_traj*third_cluster_end)]
-    third_cluster_y = sorted_all_pred_y[int(no_of_traj*second_cluster_end):int(no_of_traj*third_cluster_end)]
+    third_group_x = sorted_all_pred_x[int(no_of_traj*second_group_end):int(no_of_traj*third_group_end)]
+    third_group_y = sorted_all_pred_y[int(no_of_traj*second_group_end):int(no_of_traj*third_group_end)]
     
-    fourth_cluster_x = sorted_all_pred_x[int(no_of_traj*third_cluster_end):int(no_of_traj*fourth_cluster_end)]
-    fourth_cluster_y = sorted_all_pred_y[int(no_of_traj*third_cluster_end):int(no_of_traj*fourth_cluster_end)]
+    fourth_group_x = sorted_all_pred_x[int(no_of_traj*third_group_end):int(no_of_traj*fourth_group_end)]
+    fourth_group_y = sorted_all_pred_y[int(no_of_traj*third_group_end):int(no_of_traj*fourth_group_end)]
     
-    second_cluster_data = run_KMeans(second_cluster_x, second_cluster_y, no_of_clusters=5)
-    third_cluster_data = run_KMeans(third_cluster_x, third_cluster_y, no_of_clusters=5)
-    fourth_cluster_data = run_KMeans(fourth_cluster_x, fourth_cluster_y, no_of_clusters=5)
+    second_group_data = run_KMeans(second_group_x, second_group_y, no_of_clusters=second_group_no_clusters)
+    third_group_data = run_KMeans(third_group_x, third_group_y, no_of_clusters=third_group_no_clusters)
+    fourth_group_data = run_KMeans(fourth_group_x, fourth_group_y, no_of_clusters=fourth_group_no_clusters)
     
     # assign the mean trajectories and weights
-    # Note: first cluster only has 1 trajectory and 1 weight
-    first_c_pred_x = np.mean(first_cluster_x, axis=0)
-    first_c_pred_y = np.mean(first_cluster_y, axis=0)
-    first_c_no_of_traj = len(first_cluster_x)/no_of_traj
+    # Note: first group only has 1 trajectory and 1 weight
+    first_c_pred_x = np.mean(first_group_x, axis=0)
+    first_c_pred_y = np.mean(first_group_y, axis=0)
+    first_c_no_of_traj = len(first_group_x)/no_of_traj
     
     # Rest of the clusters have 5 trajectories and a weight for each of them
-    second_c_pred_x, second_c_pred_y, second_c_no_of_traj = second_cluster_data
-    third_c_pred_x, third_c_pred_y, third_c_no_of_traj = third_cluster_data
-    fourth_c_pred_x, fourth_c_pred_y, fourth_c_no_of_traj = fourth_cluster_data
+    second_c_pred_x, second_c_pred_y, second_c_no_of_traj = second_group_data
+    third_c_pred_x, third_c_pred_y, third_c_no_of_traj = third_group_data
+    fourth_c_pred_x, fourth_c_pred_y, fourth_c_no_of_traj = fourth_group_data
    
     # Return (all_x_predictions, all_y_predictions, all_weights)
     return (
         [first_c_pred_x, *second_c_pred_x, *third_c_pred_x, *fourth_c_pred_x],
         [first_c_pred_y, *second_c_pred_y, *third_c_pred_y, *fourth_c_pred_y],
-        [first_c_no_of_traj, *[i/no_of_traj for i in second_c_no_of_traj], *[i/no_of_traj for i in third_c_no_of_traj], *[i/no_of_traj for i in fourth_c_no_of_traj]]
+        [
+            first_c_no_of_traj, 
+            *[i/no_of_traj for i in second_c_no_of_traj], 
+            *[i/no_of_traj for i in third_c_no_of_traj], 
+            *[i/no_of_traj for i in fourth_c_no_of_traj]
+        ]
     )
     
