@@ -45,7 +45,7 @@ def get_angle(params, sample_vel_x, sample_vel_y):
     
     if np.random.rand() < params['DISCOUNT_AVG_PROB']:
         discount = np.random.uniform(low=params['DISCOUNT_LOWER_BOUND'])
-        angle = np.average(all_angles, weights=[discount ** i for i in np.arange(len(sample_vel_x)-1, -1, -1)])
+        angle = np.average(all_angles, weights=[discount ** i for i in np.arange(len(all_angles)-1, -1, -1)])
     else:
         angle = np.mean(all_angles)
     return angle
