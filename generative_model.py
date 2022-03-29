@@ -21,12 +21,13 @@ def get_action(params):
         return 'ANGLE_CHANGE'
     return None
 
-# Decide whether to use average or discounted average as const velocity
+# Decide whether to use average or discounted/weighted average as const velocity
 def get_const_vel(params, sample_vel_x, sample_vel_y):
     if np.random.rand() < params['DISCOUNT_AVG_PROB']:
         discount = np.random.uniform(low=params['DISCOUNT_LOWER_BOUND'])
-        const_vel_x = (discount**3*sample_vel_x[0] + discount**2*sample_vel_x[1] + discount*sample_vel_x[2] + sample_vel_x[3]) / (discount**3 + discount**2 + discount + 1)
-        const_vel_y = (discount**3*sample_vel_y[0] + discount**2*sample_vel_y[1] + discount*sample_vel_y[2] + sample_vel_y[3]) / (discount**3 + discount**2 + discount + 1)
+        # for [1,2,3] with discount of 0.5, the weights would be 0.5**2, 0.5**1, 0.5**0
+        const_vel_x = np.average(sample_vel_x, weights=[discount ** i for i in np.arange(len(sample_vel_x)-1, -1, -1)])
+        const_vel_y = np.average(sample_vel_y, weights=[discount ** i for i in np.arange(len(sample_vel_x)-1, -1, -1)])
     else:
         const_vel_x = np.mean(sample_vel_x)
         const_vel_y = np.mean(sample_vel_y)
@@ -44,7 +45,7 @@ def get_angle(params, sample_vel_x, sample_vel_y):
     
     if np.random.rand() < params['DISCOUNT_AVG_PROB']:
         discount = np.random.uniform(low=params['DISCOUNT_LOWER_BOUND'])
-        angle = (discount**2*all_angles[0] + discount*all_angles[1] + all_angles[2]) / (discount**2 + discount + 1)
+        angle = np.average(all_angles, weights=[discount ** i for i in np.arange(len(sample_vel_x)-1, -1, -1)])
     else:
         angle = np.mean(all_angles)
     return angle
