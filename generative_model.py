@@ -4,6 +4,7 @@ import pandas as pd
 import math
 import scipy.stats as st
 from sklearn.cluster import KMeans
+from sklearn_extra.cluster import KMedoids
 from tqdm import tqdm
 
 def get_model(params):
@@ -128,16 +129,21 @@ def generate_trajectory(sample_x, sample_y, params, length=5):
         
     return pred_x, pred_y
             
-def run_KMeans(pred_x_list, pred_y_list, no_of_clusters):
+def run_clustering(pred_x_list, pred_y_list, no_of_clusters, clustering_method='KMeans'):
     final_points = []
     # this can be optimized as this is done in the parent method already
     for i in range(len(pred_x_list)):
         final_points.append([pred_x_list[i][-1], pred_y_list[i][-1]])
     
-    Kmean = KMeans(n_clusters=no_of_clusters)
-    Kmean.fit(final_points)
+    if clustering_method == 'KMeans':
+        clustering = KMeans(n_clusters=no_of_clusters)
+    elif clustering_method == 'KMedoids':
+        clustering = KMedoids(n_clusters=no_of_clusters)
+    else:
+        raise Exception("Unsupported clustering method: ", clustering_method)
+    clustering.fit(final_points)
 
-    cluster_avg_x, cluster_avg_y, no_of_elements_per_cluster = get_clustered_averages(pred_x_list, pred_y_list, no_of_clusters, Kmean.labels_)
+    cluster_avg_x, cluster_avg_y, no_of_elements_per_cluster = get_clustered_averages(pred_x_list, pred_y_list, no_of_clusters, clustering.labels_)
     # Should probably also return labels or do the averaged clusters already contain them?
     return cluster_avg_x, cluster_avg_y, no_of_elements_per_cluster
 
@@ -162,7 +168,16 @@ def get_clustered_averages(all_pred_x, all_pred_y, no_of_clusters, cluster_label
         
     return cluster_avg_x, cluster_avg_y, no_of_elements_per_cluster
 
-def predict(sample_x, sample_y, params, trajectory_length=5):
+# Smoothen an array of coordinates of one axis [[1.1, 1.7, 1.5, ...], [2.3, 3.2, 2.9, ...], ...]
+def smoothen(list_of_coordinates):
+    copy = list_of_coordinates.copy()
+    for coordinates in copy:
+        # loop from 1st to penultimate index
+        for i in range(1, len(coordinates)-1):
+            coordinates[i] = (coordinates[i-1] + coordinates[i+1]) / 2
+    return copy
+
+def predict(sample_x, sample_y, params, trajectory_length=5, clustering_method='KMeans', smoothing=True):
     all_pred_x, all_pred_y = [], []
     all_final_x, all_final_y = [], []
     
@@ -242,14 +257,22 @@ def predict(sample_x, sample_y, params, trajectory_length=5):
         if group_cluster_count == 1:
             representative_x = np.mean(group_x, axis=0)
             representative_y = np.mean(group_y, axis=0)
+            if smoothing:
+                representative_x = smoothen(np.array([representative_x]))[0] # create an array to fit the smoothen() function (could add a case there for handling a single trajectory)
+                representative_y = smoothen(np.array([representative_y]))[0]
+            
             trajectory_weight = len(representative_x)/no_of_traj
             
             return_values[0].append(representative_x)
             return_values[1].append(representative_y)
             return_values[2].append(trajectory_weight)
         else:
-            group_data = run_KMeans(group_x, group_y, no_of_clusters=group_cluster_count)
+            group_data = run_clustering(group_x, group_y, no_of_clusters=group_cluster_count, clustering_method=clustering_method)
             group_pred_xs, group_pred_ys, group_no_of_trajs = group_data
+            
+            if smoothing:
+                group_pred_xs = smoothen(group_pred_xs)
+                group_pred_ys = smoothen(group_pred_ys)
             
             return_values[0] = return_values[0] + [*group_pred_xs]
             return_values[1] = return_values[1] + [*group_pred_ys]
