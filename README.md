@@ -1,7 +1,7 @@
 # Human trajectory forecasting
 This repository contains the code for the human trajectory forecasting method developed as part of the following Master's thesis https://comserv.cs.ut.ee/ati_thesis/datasheet.php?id=75142&year=2022
 
-The main repository for the Master's thesis resides in https://github.com/karlriis/trajectory-forecasting. Some additional useful files and notebooks can be found there.
+The main branch for the Master's thesis is https://github.com/karlriis/trajectory-forecasting/tree/thesis. Some additional useful files and notebooks can be found there.
 
 ## Setup
 The method was developed and tested with Python 3.9 and the libraries listed in `requirements.txt`.
