@@ -14,9 +14,7 @@ class GraphicsCircle(QGraphicsEllipseItem):
     pass
 
 class GraphicsPath(QGraphicsPathItem):
-    # def setBrush(self, Union, QBrush=None, QColor=None, Qt_GlobalColor=None, QGradient=None):
     def paint(self, painter: QPainter, styleOptionGraphicsItem, widget=None):
-        # painter.setBrush()
         painter.drawPath(self.path())
 
     def boundingRect(self):
@@ -30,7 +28,6 @@ class OpenTrajUI(QMainWindow, Ui_MainWindow):
         super(OpenTrajUI, self).__init__()
         self.setupUi(self)
         self.scene = QGraphicsScene()
-#        self.scene.setSceneRect(QRectF(QPointF(-1000, 1000), QSizeF(2000, 2000)));
 
         self.graphicsView.setScene(self.scene)
         self.connectWidgets()
@@ -53,8 +50,6 @@ class OpenTrajUI(QMainWindow, Ui_MainWindow):
         im_np = np.require(im_np, np.uint8, 'C')
         qimage = QImage(im_np.data, im_np.shape[1], im_np.shape[0], im_np.strides[0], QImage.Format_RGB888)
         self.pixmap_item.setPixmap(QPixmap(qimage))
-#        self.pixmap_item.update()
-#        self.scene.update()
 
     def __add_circle_item__(self):
         circle_item = QGraphicsEllipseItem()
@@ -63,7 +58,6 @@ class OpenTrajUI(QMainWindow, Ui_MainWindow):
 
     def __add_path_item__(self):
         path_item = QGraphicsPathItem()
-        # path_item = GraphicsPath()
 
         self.scene.addItem(path_item)
         self.path_items.append(path_item)
@@ -80,7 +74,6 @@ class OpenTrajUI(QMainWindow, Ui_MainWindow):
 
     def draw_path(self, path, color=[], width=[2]):
         if len(path) < 2:
-            print('Warning: Path has less than 2 points')
             return
 
         self.path_item_indicator += 1
@@ -110,38 +103,11 @@ class OpenTrajUI(QMainWindow, Ui_MainWindow):
 
     def connectWidgets(self):
         self.butPlay.clicked.connect(self.playPushed)
-        # self.butVisualize.clicked.connect(self.changeTabToVisualize)
-        # self.butTracking.clicked.connect(self.changeTabToTracking)
-        # self.butAnalysis.clicked.connect(self.changeTabToAnalysis)
-
-    def changeTabToVisualize(self):
-        # if self.butVisualize.isChecked():
-        #     return
-        self.butVisualize.setChecked(True)
-        self.butTracking.setChecked(False)
-        self.butAnalysis.setChecked(False)
-
-    def changeTabToTracking(self):
-        # if self.butTracking.isChecked():
-        #     return
-        self.butTracking.setChecked(True)
-        self.butVisualize.setChecked(False)
-        self.butAnalysis.setChecked(False)
-
-    def changeTabToAnalysis(self):
-        # if self.butAnalysis.isChecked():
-        #     return
-        self.butAnalysis.setChecked(True)
-        self.butVisualize.setChecked(False)
-        self.butTracking.setChecked(False)
 
     def setTimestamp(self, timestamp):
         self.labelTimestamp.setText(str(timestamp))
 
     def playPushed(self):
-        # test
-        # self.textEdit.append("Python version:")
-        # self.textEdit.append(sys.version)
         self.pause = not self.butPlay.isChecked()
 
 

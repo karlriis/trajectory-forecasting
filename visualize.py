@@ -6,14 +6,8 @@ import argparse
 import time
 import generative_model
 
-import sys
-sys.path.insert(0, '/Users/kriis/ut/MSc/trajectory-forecasting/OpenTraj/opentraj')
-
-from toolkit.loaders.loader_eth import load_eth
-from toolkit.loaders.loader_crowds import load_crowds
-
-from toolkit.ui.pyqt.qtui.opentrajui import OpenTrajUI
-
+from data_processing import load_eth, load_hotel
+from pyqt.opentrajui import OpenTrajUI
 
 def error_msg(msg):
     print('Error:', msg)
@@ -68,7 +62,7 @@ class Play:
         if timestamp >= 0:
             self.qtui.setTimestamp(timestamp)
 
-    def draw_trajectory(self, id, ll, color, width):
+    def draw_trajectory(self, ll, color, width):
         self.qtui.draw_path(ll[..., ::-1], color, [width])
 
         if self.recording == True:
@@ -82,7 +76,7 @@ class Play:
             cv2.circle(self.bg_im, (pos[0], pos[1]), radius, tuple(reversed(color)), 0, cv2.LINE_AA)
 
     def play(self, traj_dataset, Hinv, media_file):
-        frame_ids = sorted(traj_dataset.data['frame_id'].unique())
+        frame_ids = sorted(traj_dataset['frame_id'].unique())
 
         if os.path.exists(media_file):
             print("media file exists")
@@ -104,8 +98,8 @@ class Play:
         predicted_trajectories_prev = []
 
         # Get the entire historical trajectories
-        all_trajs_whole = traj_dataset.data.groupby('agent_id')
-        all_trajs_whole = [v[['pos_x', 'pos_y']].to_numpy() for k, v in all_trajs_whole]
+        #all_trajs_whole = traj_dataset.groupby('agent_id')
+        #all_trajs_whole = [v[['pos_x', 'pos_y']].to_numpy() for k, v in all_trajs_whole]
 
         while True:
             if self.is_a_video(media_file) and not pause:
@@ -118,9 +112,9 @@ class Play:
                 predicted_trajectories_prev = []
 
             # Get the historical trajectories for last 50 frames
-            all_trajs = traj_dataset.data[
-                            (traj_dataset.data['frame_id'] <= t) &
-                            (traj_dataset.data['frame_id'] > t - 50)
+            all_trajs = traj_dataset[
+                            (traj_dataset['frame_id'] <= t) &
+                            (traj_dataset['frame_id'] > t - 50)
                             ].groupby('agent_id')
             
             agent_ids = [k for k, v in all_trajs]
@@ -130,12 +124,12 @@ class Play:
                 # draw the historical trajectory for the last 50 frames
                 traj_i = all_trajs[i]
                 TRAJ_i = self.to_image_frame(Hinv, traj_i)
-                self.draw_trajectory(id, TRAJ_i, (255, 255, 0), 2)
+                self.draw_trajectory(TRAJ_i, (255, 255, 0), 2)
 
                 # draw the entire history
-                traj_whole_i = all_trajs_whole[i]
-                TRAJ_whole_i = self.to_image_frame(Hinv, traj_whole_i)
-                self.draw_trajectory(id, TRAJ_whole_i, (255, 255, 0), 1)
+                #traj_whole_i = all_trajs_whole[i]
+                #TRAJ_whole_i = self.to_image_frame(Hinv, traj_whole_i)
+                #self.draw_trajectory(TRAJ_whole_i, (255, 255, 0), 1)
 
                 predicted_trajectories = []
                 if len(traj_i) >= 3 and not pause and t%4 == 0:
@@ -158,7 +152,7 @@ class Play:
             # draw predictions
             for predicted_trajectory in predicted_trajectories_prev:
                 PRED_i = self.to_image_frame(Hinv, predicted_trajectory)
-                self.draw_trajectory(id, PRED_i, (124,252,0), 1)
+                self.draw_trajectory(PRED_i, (124,252,0), 1)
 
             if not agent_ids and not pause:
                 print('No agent')
@@ -168,7 +162,6 @@ class Play:
                 if self.recording == True:
                     out.write(self.bg_im)
 
-            
             delay_ms = 20
             self.qtui.processEvents()
             pause = self.qtui.pause
@@ -176,33 +169,21 @@ class Play:
 
 if __name__ == '__main__':
     argparser = argparse.ArgumentParser(description='OpenTraj - Human Trajectory Dataset Package')
-    argparser.add_argument('--data-root', '--data-root',
-                           help='the root address of OpenTraj directory')
+    argparser.add_argument('--data-root', '--data-root', default='./raw_data',
+                           help='the root address of OpenTraj datasets')
     argparser.add_argument('--dataset', '--dataset',
                            default='eth',
                            choices=['eth',
-                                    'hotel',
-                                    'zara01',
-                                    'zara02',
-                                    'students03',
-                                    'gc',
-                                    'sdd-bookstore0',
-                                    'Hermes-xxx'],
+                                    'hotel'],
                            help='select dataset'
                                 '(default: "eth")')
-    argparser.add_argument('--background', '--b',
-                           default='image', choices=['image', 'video'],
-                           help='select background type. video does not exist for all datasets,'
-                                'you might need to download it first.'
-                                '(default: "image")')
-
     argparser.add_argument('--model-params', '--model-params',
                         help='path of the .json file of the parameters for the prediction model')
 
     argparser.add_argument('--record', '--record', action='store_true', default='False')
 
     args = argparser.parse_args()
-    opentraj_root = args.data_root
+    data_root = args.data_root
     traj_dataset = None
     recording = args.record
 
@@ -213,39 +194,20 @@ if __name__ == '__main__':
         with open(params_json_path, "r") as params_file:
             model_params = json.load(params_file)
 
-    # #============================ ETH =================================
     if args.dataset == 'eth':
-        annot_file = os.path.join(opentraj_root, 'ETH/seq_eth/obsmat.txt')
-        traj_dataset = load_eth(annot_file)
-        homog_file = os.path.join(opentraj_root, 'ETH/seq_eth/H.txt')
-        if args.background == 'image':
-            media_file = os.path.join(opentraj_root, 'ETH/seq_eth/reference.png')
-        elif args.background == 'video':
-            media_file = os.path.join(opentraj_root, 'ETH/seq_eth/video.avi')
-        else:
-            error_msg('background type is invalid')
+        annot_file = os.path.join(data_root, 'ETH/seq_eth/obsmat.txt')
+        traj_dataset = load_eth(data_root)
+        homog_file = os.path.join(data_root, 'ETH/seq_eth/H.txt')
+        media_file = os.path.join(data_root, 'ETH/seq_eth/video.avi')
 
     elif args.dataset == 'hotel':
-        annot_file = os.path.join(opentraj_root, 'ETH/seq_hotel/obsmat.txt')
-        traj_dataset = load_eth(annot_file)
-        homog_file = os.path.join(opentraj_root, 'ETH/seq_hotel/H.txt')
-        # media_file = os.path.join(opentraj_root, 'ETH/seq_hotel/reference.png')
-        media_file = os.path.join(opentraj_root, 'ETH/seq_hotel/video.avi')
+        annot_file = os.path.join(data_root, 'ETH/seq_hotel/obsmat.txt')
+        traj_dataset = load_hotel(data_root)
+        homog_file = os.path.join(data_root, 'ETH/seq_hotel/H.txt')
+        media_file = os.path.join(data_root, 'ETH/seq_hotel/video.avi')
 
-    elif args.dataset == 'zara01':
-        annot_file = os.path.join(opentraj_root, 'UCY/zara01/annotation.vsp')
-        homog_file = os.path.join(opentraj_root, 'UCY/zara01/H.txt')
-        traj_dataset = load_crowds(annot_file, use_kalman=False, homog_file=homog_file)
-        media_file = os.path.join(opentraj_root, 'UCY/zara01/video.avi')
-
-    elif args.dataset == 'students03':
-        annot_file = os.path.join(opentraj_root, 'UCY/students03/annotation.vsp')
-        homog_file = os.path.join(opentraj_root, 'UCY/students03/H.txt')
-        traj_dataset = load_crowds(annot_file, use_kalman=False, homog_file=homog_file)
-        media_file = os.path.join(opentraj_root, 'UCY/students03/video.avi')
-
-    if not traj_dataset:
-        error_msg('dataset name is invalid')
+    else:
+        error_msg('Unsupported dataset')
 
     Homog = (np.loadtxt(homog_file)) if os.path.exists(homog_file) else np.eye(3)
     Hinv = np.linalg.inv(Homog)

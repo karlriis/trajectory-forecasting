@@ -1,18 +1,17 @@
-from matplotlib import pyplot as plt
 import numpy as np
-import pandas as pd
 import math
 import scipy.stats as st
 from sklearn.cluster import KMeans
 from sklearn_extra.cluster import KMedoids
-from tqdm import tqdm
 
+# Decide whether to use the constant velocity model or constant turning model for generating future trajectories
 def get_model(params):
     if np.random.rand() < params['CONST_VEL_MODEL_PROB']:
         return 'CONST_VEL'
     else:
         return 'CONST_VEL_W_ROTATION'
-    
+
+# Get a random action to apply during the CVM prediction
 def get_action(params):
     if np.random.rand() < params['STOP_PROB']:
         return 'STOP'
@@ -22,7 +21,7 @@ def get_action(params):
         return 'ANGLE_CHANGE'
     return None
 
-# Decide whether to use average or discounted/weighted average as const velocity
+# Calculate the base constant velocity for CVM predictions
 def get_const_vel(params, sample_vel_x, sample_vel_y):
     if np.random.rand() < params['DISCOUNT_AVG_PROB']:
         discount = np.random.uniform(low=params['DISCOUNT_LOWER_BOUND'])
@@ -35,7 +34,7 @@ def get_const_vel(params, sample_vel_x, sample_vel_y):
         
     return const_vel_x, const_vel_y
 
-# Decide whether to use average or discounted average angle
+# Calculate the base constant velocity for the constant turning model predictions
 def get_angle(params, sample_vel_x, sample_vel_y):
     all_angles = []
     for i in range(1, len(sample_vel_x)):
@@ -51,20 +50,17 @@ def get_angle(params, sample_vel_x, sample_vel_y):
         angle = np.mean(all_angles)
     return angle
 
+# Calculate final displacement error
 def calculate_FDE(pred_x, pred_y, test_x, test_y):
-
     final_displacement_x = pred_x[-1] - test_x[-1]
     final_displacement_y = pred_y[-1] - test_y[-1]
     FDE = np.sqrt(final_displacement_x**2 + final_displacement_y**2)
     
     return FDE
 
+#Rotate a point counterclockwise by a given angle around a given origin.
+#The angle should be given in radians.
 def rotate(origin, point, angle):
-    """
-    Rotate a point counterclockwise by a given angle around a given origin.
-
-    The angle should be given in radians.
-    """
     ox, oy = origin
     px, py = point
 
@@ -72,30 +68,24 @@ def rotate(origin, point, angle):
     qy = oy + math.sin(angle) * (px - ox) + math.cos(angle) * (py - oy)
     return qx, qy
 
-with open('velocity_distributions.npy', 'rb') as f:
-    x_dist = np.load(f)
-    y_dist = np.load(f)
-
+# Generates one future trajectory for a historical path
 def generate_trajectory(sample_x, sample_y, params, length=5):
-    # calculate velocity data
+    # Add noise to the historical trajectory
     sample_vel_x = [(sample_x[i] - sample_x[i-1]) + np.random.normal(0, params['NOISE']) for i in range(1, len(sample_x))]
     sample_vel_y = [(sample_y[i] - sample_y[i-1]) + np.random.normal(0, params['NOISE']) for i in range(1, len(sample_y))]
     
+    # Calculate the constant velocity and constant angle
     const_vel_x, const_vel_y = get_const_vel(params, sample_vel_x, sample_vel_y)
-    is_vel_x_positive = const_vel_x > 0
-    is_vel_y_positive = const_vel_y > 0
     angle = get_angle(params, sample_vel_x, sample_vel_y)
-    
-    max_vel_x = 2*const_vel_x
-    max_vel_y = 2*const_vel_y
-    
-    # start predicting
+
+    # Start predicting
     pred_x = []
     pred_y = []
     model = get_model(params)
-    for i in range(length):
+    for _ in range(length):
         action = get_action(params)
         if action == 'STOP':
+            # For the stop event, the next predicted point will be exactly the same as the last point
             if len(pred_x) == 0:
                 pred_x.append(sample_x[-1])
                 pred_y.append(sample_y[-1])
@@ -105,14 +95,8 @@ def generate_trajectory(sample_x, sample_y, params, length=5):
             continue
             
         elif action == 'VELOCITY_CHANGE':
-            #const_vel_x = const_vel_x + np.random.normal(0, params['VELOCITY_CHANGE_NOISE'])
-            const_vel_x = np.random.choice(x_dist)
-            if not is_vel_x_positive:
-                const_vel_x = const_vel_x * -1
-            #const_vel_y = const_vel_y + np.random.normal(0, params['VELOCITY_CHANGE_NOISE'])
-            const_vel_y = np.random.choice(y_dist)
-            if not is_vel_y_positive:
-                const_vel_y = const_vel_y * -1
+            const_vel_x = const_vel_x + np.random.normal(0, params['VELOCITY_CHANGE_NOISE'])
+            const_vel_y = const_vel_y + np.random.normal(0, params['VELOCITY_CHANGE_NOISE'])
         elif action == 'ANGLE_CHANGE':
             angle = angle + np.random.normal(0, params['ANGLE_CHANGE_NOISE'])
         
@@ -138,15 +122,15 @@ def generate_trajectory(sample_x, sample_y, params, length=5):
             pred_x.append(rot_x)
             pred_y.append(rot_y)
             
-            # redefine the average velocity as it now has a new heading
+            # Redefine the average velocity as it now has a new heading
             const_vel_x = rot_x - prev_x
             const_vel_y = rot_y - prev_y
         
     return pred_x, pred_y
-            
+
+# Run k-means clustering on many future trajectory predictions
 def run_clustering(pred_x_list, pred_y_list, no_of_clusters, clustering_method='KMeans'):
     final_points = []
-    # this can be optimized as this is done in the parent method already
     for i in range(len(pred_x_list)):
         final_points.append([pred_x_list[i][-1], pred_y_list[i][-1]])
     
@@ -159,9 +143,10 @@ def run_clustering(pred_x_list, pred_y_list, no_of_clusters, clustering_method='
     clustering.fit(final_points)
 
     cluster_avg_x, cluster_avg_y, no_of_elements_per_cluster = get_clustered_averages(pred_x_list, pred_y_list, no_of_clusters, clustering.labels_)
-    # Should probably also return labels or do the averaged clusters already contain them?
+
     return cluster_avg_x, cluster_avg_y, no_of_elements_per_cluster
 
+# Get the average trajectory of each cluster attained from K-means clustering
 def get_clustered_averages(all_pred_x, all_pred_y, no_of_clusters, cluster_labels):
     no_of_elements_per_cluster = []
     for i in range(no_of_clusters):
@@ -183,12 +168,12 @@ def get_clustered_averages(all_pred_x, all_pred_y, no_of_clusters, cluster_label
         
     return cluster_avg_x, cluster_avg_y, no_of_elements_per_cluster
 
-# Smoothen an array of coordinates of one axis [[1.1, 1.7, 1.5, ...], [2.3, 3.2, 2.9, ...], ...]
+# Smoothen an array of coordinates of one axis
 def smoothen(list_of_coordinates):
     copy = list_of_coordinates.copy()
     for coordinates in copy:
-        # loop from 1st to penultimate index
         for i in range(1, len(coordinates)-1):
+            # replace each coordinate with the average of two surrounding coordinates
             coordinates[i] = (coordinates[i-1] + coordinates[i+1]) / 2
     return copy
 
@@ -196,7 +181,7 @@ def predict(sample_x, sample_y, params, trajectory_length=5, clustering_method='
     all_pred_x, all_pred_y = [], []
     all_final_x, all_final_y = [], []
     
-    for i in range(params['NO_OF_TRAJECTORIES']):
+    for _ in range(params['NO_OF_TRAJECTORIES']):
         pred_x, pred_y = generate_trajectory(sample_x, sample_y, params, trajectory_length)
         all_pred_x.append(pred_x)
         all_pred_y.append(pred_y)
@@ -204,37 +189,44 @@ def predict(sample_x, sample_y, params, trajectory_length=5, clustering_method='
         all_final_x.append(pred_x[-1])
         all_final_y.append(pred_y[-1])
     
-    # run kernel density estimate
+    # Run kernel density estimation
     values = np.vstack([all_final_x, all_final_y])
     kernel = st.gaussian_kde(values)
-    # evaluate trajectories
+    # Evaluate trajectories
     evaluated = kernel.evaluate(values)
-    # find the sorting order for the trajectories based on KDE pdf
+    # Find the sorting order for the trajectories based on KDE pdf
     sorting_order = evaluated.argsort()[::-1] # Note: the sorting order is ascending by default, [::-1] reverses the order (might be too slow though?)
     
-    # sort predictions by KDE density
+    # Sort predictions by KDE density
     sorted_all_pred_x = np.array(all_pred_x)[sorting_order]
     sorted_all_pred_y = np.array(all_pred_y)[sorting_order]
     
-    # distribute the data to representative sets
     no_of_traj = len(sorted_all_pred_x)
 
-    
-    # find the closest TOP% (first cluster size) of trajectories for the highest density trajectory
+    # The first group has a slightly different behaviour than the rest. We don't want to just take the top [first_group_size] % of
+    # the generated trajectories by KDE, but we want to take the top [first_group_size] % of the trajectories closest to our 'best'
+    # trajectory (the one with the highest estimated density). We can think of the first group as the group surrounding the densest area.
+
+    # To achieve this, we take the trajectory with the highest density estimation and calculate every other trajectory's distance
+    # from it. Based on the distances, we move the ones with the lowest distance to the front of the sorted generated trajectories.
     highest_density_x = sorted_all_pred_x[0]
     highest_density_y = sorted_all_pred_y[0]
     largest_distance = None
     closest_indexes = np.array([], dtype=np.int8)
     closest_distances = np.array([])
     
+    TOP_GROUP_MAX_SIZE = no_of_traj*params['GROUP_PERCENTAGES'][0]
     for idx in range(len(sorted_all_pred_x)):
         distance = calculate_FDE(highest_density_x, highest_density_y, sorted_all_pred_x[idx], sorted_all_pred_y[idx])
         
-        if len(closest_indexes) < no_of_traj*params['GROUP_PERCENTAGES'][0]:
+        # Firstly, we fill the closest_indexes array with as many instances as we allow in the first group
+        if len(closest_indexes) < TOP_GROUP_MAX_SIZE:
             closest_indexes = np.append(closest_indexes, idx)
             closest_distances = np.append(closest_distances, distance)
             if largest_distance == None or largest_distance < distance:
                 largest_distance = distance
+        # Now the closest_indexes is initially 'full'. If the current instance is closer than the furthest one
+        # in the closest_indexes as of now, then we replace it.
         else:
             if largest_distance > distance:
                 index_max = np.argmax(closest_distances)
@@ -242,10 +234,11 @@ def predict(sample_x, sample_y, params, trajectory_length=5, clustering_method='
                 closest_distances[index_max] = distance
                 largest_distance = np.amax(closest_distances)
     
+    # Get the closest trajectories
     closest_x = sorted_all_pred_x[closest_indexes]
     closest_y = sorted_all_pred_y[closest_indexes]
 
-    # remove the closest trajectories from the data...
+    # Remove the closest trajectories from the data...
     sorted_all_pred_x = np.delete(sorted_all_pred_x, closest_indexes, axis=0)
     sorted_all_pred_y = np.delete(sorted_all_pred_y, closest_indexes, axis=0)
     
@@ -255,16 +248,15 @@ def predict(sample_x, sample_y, params, trajectory_length=5, clustering_method='
     
     # Return values will be in a format of [pred_xs: list, pred_ys: list, pred_weigths: list]
     return_values = [[], [], []]
-    
-    
+
     ## Loop over the representative groups and run K-means clustering on each
-    ## (if group should return more than 1 representative trajectory)
-    
+    ## (if the group should return more than 1 representative trajectory)
     prev_group_size_end = 0
     group_size_ends = params['GROUP_PERCENTAGES']
     for group_idx, group_size_end in enumerate(group_size_ends):
         group_cluster_count = params['GROUP_CLUSTER_COUNT'][group_idx]
         
+        # Get the current group of generated trajectories
         group_x = sorted_all_pred_x[int(no_of_traj*prev_group_size_end):int(no_of_traj*group_size_end)]
         group_y = sorted_all_pred_y[int(no_of_traj*prev_group_size_end):int(no_of_traj*group_size_end)]
         
@@ -295,6 +287,5 @@ def predict(sample_x, sample_y, params, trajectory_length=5, clustering_method='
         
         prev_group_size_end = group_size_end
    
-    # Return (all_x_predictions, all_y_predictions, all_weights)
+    # Return [all_x_predictions, all_y_predictions, all_weights]
     return return_values
-    
