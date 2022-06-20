@@ -89,10 +89,10 @@ The script can be enhanced by including other datasets with videos from OpenTraj
 The script has three non-compulsory parameters:
 - `--data-root` specifies the location of the OpenTraj datasets (by default in the `./raw_data` folder)
 - `--dataset` specifies which dataset to visualize, currently the only options are the `eth` and `hotel` (default is `eth` )
-- `--model-params` provides a path to a .json file containing the parameters for our method (the `params` dictionary shown above). By default a simple configuration is used which produces 4 predictions.
+- `--model-params` provides a path to a .json file containing the parameters for our method (the `params` dictionary shown above). By default a simple configuration is used which produces 4 predictions. An example configuration file is included under `example_params.json`.
 
 and one boolean flag
-- `--record` when the flag is provided then the visualization played by the script is recorded to a separate file named `output.avi`. This can be useful as the visualization UI can get quite slow when a lot of people are moving around in the scene, the recording is created in a fixed framerate which allows for smooth playback.
+- `--record` when the flag is provided then the visualization played by the script is recorded to a separate file named `output.avi`. This can be useful as the visualization UI can get quite slow when a lot of people are moving around in the scene. The recording is created in a fixed framerate which allows for smooth playback.
 
 An example of calling the script with all options:
 ```
