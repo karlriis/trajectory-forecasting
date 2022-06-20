@@ -1,5 +1,5 @@
 # trajectory-forecasting
-This repository contains the code for my Master's thesis on the topic of forecasting human trajectories https://comserv.cs.ut.ee/ati_thesis/datasheet.php?language=en
+This repository contains the code for my Master's thesis on the topic of forecasting human trajectories https://comserv.cs.ut.ee/ati_thesis/datasheet.php?id=75142&year=2022
 
 The new trajectory forecasting method resides in `generative_model.py`.
 The main function for using the method is `predict()`. Its input parameters are shown in the table below (non-compulsory parameters with default values are marked with \*).
