@@ -72,13 +72,22 @@ def rotate(origin, point, angle):
     qy = oy + math.sin(angle) * (px - ox) + math.cos(angle) * (py - oy)
     return qx, qy
 
+with open('velocity_distributions.npy', 'rb') as f:
+    x_dist = np.load(f)
+    y_dist = np.load(f)
+
 def generate_trajectory(sample_x, sample_y, params, length=5):
     # calculate velocity data
     sample_vel_x = [(sample_x[i] - sample_x[i-1]) + np.random.normal(0, params['NOISE']) for i in range(1, len(sample_x))]
     sample_vel_y = [(sample_y[i] - sample_y[i-1]) + np.random.normal(0, params['NOISE']) for i in range(1, len(sample_y))]
     
     const_vel_x, const_vel_y = get_const_vel(params, sample_vel_x, sample_vel_y)
+    is_vel_x_positive = const_vel_x > 0
+    is_vel_y_positive = const_vel_y > 0
     angle = get_angle(params, sample_vel_x, sample_vel_y)
+    
+    max_vel_x = 2*const_vel_x
+    max_vel_y = 2*const_vel_y
     
     # start predicting
     pred_x = []
@@ -96,8 +105,14 @@ def generate_trajectory(sample_x, sample_y, params, length=5):
             continue
             
         elif action == 'VELOCITY_CHANGE':
-            const_vel_x = const_vel_x + np.random.normal(0, params['VELOCITY_CHANGE_NOISE'])
-            const_vel_y = const_vel_y + np.random.normal(0, params['VELOCITY_CHANGE_NOISE'])
+            #const_vel_x = const_vel_x + np.random.normal(0, params['VELOCITY_CHANGE_NOISE'])
+            const_vel_x = np.random.choice(x_dist)
+            if not is_vel_x_positive:
+                const_vel_x = const_vel_x * -1
+            #const_vel_y = const_vel_y + np.random.normal(0, params['VELOCITY_CHANGE_NOISE'])
+            const_vel_y = np.random.choice(y_dist)
+            if not is_vel_y_positive:
+                const_vel_y = const_vel_y * -1
         elif action == 'ANGLE_CHANGE':
             angle = angle + np.random.normal(0, params['ANGLE_CHANGE_NOISE'])
         
